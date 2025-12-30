@@ -1,0 +1,142 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile.dev
+    container_name: ragbase-api-dev
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app
+      - ./tests:/app/tests
+      - ./uploads:/app/uploads
+      - ./alembic:/app/alembic
+      - ./.env:/app/.env
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=True
+      - DATABASE_URL=postgresql+asyncpg://raguser:ragpass@postgres:5432/ragbase
+      - REDIS_URL=redis://redis:6379/0
+      - QDRANT_URL=http://qdrant:6333
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - LOG_LEVEL=DEBUG
+      - SECRET_KEY=dev-secret-key-12345678901234567890123456789012
+      - JWT_SECRET_KEY=dev-jwt-secret-key-1234567890123456789012
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    networks:
+      - ragbase-network
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: ragbase-postgres-dev
+    environment:
+      POSTGRES_USER: raguser
+      POSTGRES_PASSWORD: ragpass
+      POSTGRES_DB: ragbase
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U raguser -d ragbase"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ragbase-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: ragbase-redis-dev
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data_dev:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ragbase-network
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: ragbase-qdrant-dev
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data_dev:/qdrant/storage
+    networks:
+      - ragbase-network
+    restart: unless-stopped
+
+  # Ollama - Comentado porque se usa la instancia local del host
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: ragbase-ollama-dev
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data_dev:/root/.ollama
+  #   networks:
+  #     - ragbase-network
+  #   restart: unless-stopped
+  #   # Uncomment to automatically pull models on startup
+  #   entrypoint: ["/bin/bash", "-c", "ollama serve & sleep 5 && ollama pull phi3:mini && wait"]
+
+  # Optional: PGAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: ragbase-pgadmin-dev
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data_dev:/var/lib/pgadmin
+    networks:
+      - ragbase-network
+    restart: unless-stopped
+
+  # Optional: Redis Commander for Redis management
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: ragbase-redis-commander-dev
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    networks:
+      - ragbase-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data_dev:
+    driver: local
+  redis_data_dev:
+    driver: local
+  qdrant_data_dev:
+    driver: local
+  ollama_data_dev:
+    driver: local
+  pgadmin_data_dev:
+    driver: local
+
+networks:
+  ragbase-network:
+    driver: bridge
