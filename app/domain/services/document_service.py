@@ -155,16 +155,18 @@ class DocumentService:
             )
 
         # Step 5: Index in vector store
-        ids = [f"{document.id}_{i}" for i in range(len(chunks))]
+        # Generate unique UUIDs for each chunk
+        ids = [str(uuid.uuid4()) for _ in range(len(chunks))]
         payloads = [
             {
                 "content": chunk["content"],
                 "document_id": str(document.id),
                 "chunk_index": chunk["chunk_index"],
+                "chunk_id": chunk_id,  # Store the chunk UUID for later retrieval
                 "tenant_id": str(document.tenant_id),
                 "metadata": chunk["metadata"],
             }
-            for chunk in chunks
+            for chunk_id, chunk in zip(ids, chunks)
         ]
 
         await self.vector_store.upsert_vectors(
@@ -207,13 +209,22 @@ class DocumentService:
         # Delete vectors from vector store
         collection_name = f"tenant_{tenant_id}"
         if await self.vector_store.collection_exists(collection_name):
-            # Get all chunk IDs for this document
-            chunk_ids = [f"{document_id}_{i}" for i in range(document.num_chunks)]
-
             try:
-                await self.vector_store.delete_vectors(
+                # Delete by filter instead of by IDs (since we use random UUIDs now)
+                from qdrant_client.http import models as qdrant_models
+
+                await self.vector_store.client.delete(
                     collection_name=collection_name,
-                    ids=chunk_ids,
+                    points_selector=qdrant_models.FilterSelector(
+                        filter=qdrant_models.Filter(
+                            must=[
+                                qdrant_models.FieldCondition(
+                                    key="document_id",
+                                    match=qdrant_models.MatchValue(value=str(document_id)),
+                                )
+                            ]
+                        )
+                    ),
                 )
             except Exception as e:
                 logger.warning(

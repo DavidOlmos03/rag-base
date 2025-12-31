@@ -7,6 +7,10 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
     git \
+    cmake \
+    g++ \
+    pkg-config \
+    libgoogle-perftools-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Poetry
@@ -17,9 +21,9 @@ RUN curl -sSL https://install.python-poetry.org | python3 - \
 COPY pyproject.toml poetry.lock* ./
 
 # Install dependencies
-# First install PyTorch CPU-only to avoid CUDA dependencies
+# First install PyTorch CPU-only to avoid CUDA dependencies (compatible versions)
 RUN poetry config virtualenvs.create false \
-    && pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu \
     && poetry install --no-interaction --no-ansi --with dev --no-root
 
 # Copy application code
