@@ -33,7 +33,7 @@ async def get_session() -> AsyncSession:
 async def get_current_user(
     request: Request,
     session: AsyncSession = Depends(get_session),
-) -> Tenant:
+):
     """Get current authenticated user.
 
     Args:

@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.api.middleware.auth import AuthMiddleware
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.events import on_shutdown, on_startup
@@ -42,7 +43,65 @@ app = FastAPI(
     redoc_url=f"/api/{settings.API_VERSION}/redoc",
     openapi_url=f"/api/{settings.API_VERSION}/openapi.json",
     lifespan=lifespan,
+    swagger_ui_parameters={
+        "persistAuthorization": True,  # Remember authorization between page refreshes
+    },
 )
+
+# Configure OpenAPI security scheme for Bearer token
+def custom_openapi():
+    """Customize OpenAPI schema to include security definitions."""
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    from fastapi.openapi.utils import get_openapi
+
+    openapi_schema = get_openapi(
+        title=settings.APP_NAME,
+        version="0.1.0",
+        description="RAG as a Service - Multi-tenant, multi-LLM base platform",
+        routes=app.routes,
+    )
+
+    # Add security scheme
+    openapi_schema["components"]["securitySchemes"] = {
+        "BearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "Enter your JWT token obtained from /api/v1/auth/login",
+        }
+    }
+
+    # Apply security to all endpoints except public ones
+    public_paths = [
+        "/",
+        f"/api/{settings.API_VERSION}/health",
+        f"/api/{settings.API_VERSION}/status",
+        f"/api/{settings.API_VERSION}/docs",
+        f"/api/{settings.API_VERSION}/redoc",
+        f"/api/{settings.API_VERSION}/openapi.json",
+        f"/api/{settings.API_VERSION}/auth/register",
+        f"/api/{settings.API_VERSION}/auth/login",
+    ]
+
+    # HTTP methods to apply security to
+    http_methods = ["get", "post", "put", "delete", "patch", "options", "head"]
+
+    for path, path_item in openapi_schema["paths"].items():
+        # Check if this path requires authentication
+        is_public = any(path == pub or path.startswith(pub + "/") for pub in public_paths)
+
+        if not is_public:
+            # Apply security to each HTTP method in this path
+            for method in http_methods:
+                if method in path_item:
+                    path_item[method]["security"] = [{"BearerAuth": []}]
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
 
 # CORS middleware
 app.add_middleware(
@@ -52,6 +111,9 @@ app.add_middleware(
     allow_methods=settings.CORS_METHODS,
     allow_headers=settings.CORS_HEADERS,
 )
+
+# Authentication middleware
+app.add_middleware(AuthMiddleware)
 
 
 # Global exception handler

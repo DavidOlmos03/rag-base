@@ -172,7 +172,7 @@ async def query_rag(
 @router.post("/stream")
 async def query_rag_stream(
     query_request: QueryRequest,
-    current_user: Tenant = Depends(get_current_user),
+    current_user = Depends(get_current_user),
     rag_pipeline: RAGPipeline = Depends(get_rag_pipeline),
 ):
     """Execute a RAG query with streaming response.
@@ -216,7 +216,7 @@ async def query_rag_stream(
 async def get_query_history(
     limit: int = 50,
     offset: int = 0,
-    current_user: Tenant = Depends(get_current_user),
+    current_user = Depends(get_current_user),
     query_repo: QueryRepository = Depends(get_query_repository),
 ):
     """Get query history for current user.

@@ -18,8 +18,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     # Public paths that don't require authentication
     PUBLIC_PATHS = [
-        "/",
         "/api/v1/health",
+        "/api/v1/status",
         "/api/v1/docs",
         "/api/v1/redoc",
         "/api/v1/openapi.json",
@@ -37,6 +37,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
         Returns:
             Response
         """
+        # Skip authentication for root path
+        if request.url.path == "/":
+            return await call_next(request)
+
         # Skip authentication for public paths
         if any(request.url.path.startswith(path) for path in self.PUBLIC_PATHS):
             return await call_next(request)
